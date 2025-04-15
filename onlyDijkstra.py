@@ -1,0 +1,167 @@
+import pygame
+import random
+from collections import deque
+
+# Configurações
+largura_tela = 500
+altura_tela = 500
+cols, rows = 20, 20
+w = largura_tela // cols
+
+# Cores
+COR_FUNDO = (30, 30, 30)
+COR_PAREDE = (200, 200, 200)
+COR_CAMINHO_DIJKSTRA = (31, 81, 255)
+
+# Inicialização do Pygame
+pygame.init()
+tela = pygame.display.set_mode((largura_tela, altura_tela))
+pygame.display.set_caption("Labirinto - Dijkstra")
+clock = pygame.time.Clock()
+
+# Classe Célula
+class Celula:
+    def __init__(self, i, j):
+        self.i = i
+        self.j = j
+        self.paredes = [True, True, True, True]  # top, right, bottom, left
+        self.visitada = False
+
+    def desenhar(self, tela, cor):
+        x = self.i * w
+        y = self.j * w
+
+        if self.paredes[0]:
+            pygame.draw.line(tela, COR_PAREDE, (x, y), (x + w, y), 2)
+        if self.paredes[1]:
+            pygame.draw.line(tela, COR_PAREDE, (x + w, y), (x + w, y + w), 2)
+        if self.paredes[2]:
+            pygame.draw.line(tela, COR_PAREDE, (x + w, y + w), (x, y + w), 2)
+        if self.paredes[3]:
+            pygame.draw.line(tela, COR_PAREDE, (x, y + w), (x, y), 2)
+
+        if self.visitada:
+            pygame.draw.rect(tela, cor, (x + 2, y + 2, w - 4, w - 4))
+
+    def vizinhos_nao_visitados(self, grid):
+        vizinhos = []
+        direcoes = [(0, -1), (1, 0), (0, 1), (-1, 0)]
+        for dx, dy in direcoes:
+            ni, nj = self.i + dx, self.j + dy
+            if 0 <= ni < cols and 0 <= nj < rows:
+                vizinha = grid[nj][ni]
+                if not vizinha.visitada:
+                    vizinhos.append(vizinha)
+        return vizinhos
+
+def remover_paredes(a, b):
+    dx = a.i - b.i
+    dy = a.j - b.j
+    if dx == 1:
+        a.paredes[3] = False
+        b.paredes[1] = False
+    elif dx == -1:
+        a.paredes[1] = False
+        b.paredes[3] = False
+    if dy == 1:
+        a.paredes[0] = False
+        b.paredes[2] = False
+    elif dy == -1:
+        a.paredes[2] = False
+        b.paredes[0] = False
+
+def gerar_labirinto():
+    grid = [[Celula(i, j) for i in range(cols)] for j in range(rows)]
+    atual = grid[0][0]
+    atual.visitada = True
+    pilha = [atual]
+
+    while pilha:
+        vizinhos = atual.vizinhos_nao_visitados(grid)
+        if vizinhos:
+            proxima = random.choice(vizinhos)
+            remover_paredes(atual, proxima)
+            proxima.visitada = True
+            pilha.append(atual)
+            atual = proxima
+        else:
+            atual = pilha.pop()
+
+    grid[1][0].paredes[3] = False  # Entrada
+    grid[rows - 1][cols - 1].paredes[1] = False  # Saída
+    return grid
+
+def desenhar_labirinto(grid):
+    for linha in grid:
+        for celula in linha:
+            celula.desenhar(tela, (50, 50, 50))
+
+def resolver_dijkstra(grid):
+    inicio = (0, 1)
+    objetivo = (cols - 1, rows - 1)
+    distancias = {inicio: 0}
+    anterior = {inicio: None}
+    visitados = set()
+
+    mapeamento_paredes = {
+        (0, -1): 0,  # cima
+        (1, 0): 1,   # direita
+        (0, 1): 2,   # baixo
+        (-1, 0): 3   # esquerda
+    }
+
+    fila = deque([inicio])
+
+    while fila:
+        atual = fila.popleft()
+        if atual in visitados:
+            continue
+        visitados.add(atual)
+
+        i, j = atual
+        celula = grid[j][i]
+
+        for dx, dy in mapeamento_paredes:
+            ni, nj = i + dx, j + dy
+            if 0 <= ni < cols and 0 <= nj < rows:
+                if not celula.paredes[mapeamento_paredes[(dx, dy)]]:
+                    vizinho = (ni, nj)
+                    if vizinho not in distancias or distancias[atual] + 1 < distancias[vizinho]:
+                        distancias[vizinho] = distancias[atual] + 1
+                        anterior[vizinho] = atual
+                        fila.append(vizinho)
+
+    caminho = []
+    atual = objetivo
+    while atual:
+        caminho.append(atual)
+        atual = anterior.get(atual)
+    return caminho[::-1]
+
+def desenhar_caminho(caminho, cor):
+    for i, j in caminho:
+        x = i * w + 4
+        y = j * w + 4
+        pygame.draw.rect(tela, cor, (x, y, w - 8, w - 8))
+
+def main():
+    grid = gerar_labirinto()
+    caminho_dijkstra = resolver_dijkstra(grid)
+
+    rodando = True
+    while rodando:
+        tela.fill(COR_FUNDO)
+        desenhar_labirinto(grid)
+        desenhar_caminho(caminho_dijkstra, COR_CAMINHO_DIJKSTRA)
+        pygame.display.flip()
+
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
+                rodando = False
+
+        clock.tick(30)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
